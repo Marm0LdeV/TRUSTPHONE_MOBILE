@@ -1,58 +1,76 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import ProductItem from '../Components/ProductItem'
 import Footer from '../Components/Footer'
 
-const MOCK_CART_ITEMS = [
-  {
-    id: 1,
-    brand: 'APPLE',
-    name: 'iPhone 13 - 128GB',
-    price: 549.00,
-    quality: 'Excelente',
-    image: 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=256&fit=crop',
-    color: 'Azul Pacífico',
-    quantity: 1
-  },
-  {
-    id: 2,
-    brand: 'SAMSUNG',
-    name: 'Samsung Galaxy S22',
-    price: 420.00,
-    quality: 'Excelente',
-    image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=256&fit=crop',
-    color: 'Phantom Black',
-    quantity: 1
-  }
-]
-
 const CartPage = () => {
-  const [cartItems, setCartItems] = useState(MOCK_CART_ITEMS)
+  const [cartItems, setCartItems] = useState([])
+  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
+  useEffect(() => {
+    const stored = localStorage.getItem('cart')
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setCartItems(parsed.map(item => ({ ...item, quantity: item.quantity || 1 })))
+      } catch {
+        setCartItems([])
+      }
+      setLoading(false)
+    } else {
+      // Fallback: load real phones from API
+      fetch('/api/celulares')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            const preloaded = data.slice(0, 2).map(c => ({
+              id: c._id,
+              brand: c.idMarca?.nombre?.toUpperCase() || 'MARCA',
+              name: `${c.nombre} ${c.modelo || ''}`.trim(),
+              price: Number(c.precio) || 0,
+              quality: c.condicion || 'Excelente',
+              image: c.imagen || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=256&fit=crop',
+              color: c.color || '',
+              quantity: 1
+            }))
+            setCartItems(preloaded)
+            localStorage.setItem('cart', JSON.stringify(preloaded))
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    }
+  }, [])
+
+  const updateCart = (items) => {
+    setCartItems(items)
+    localStorage.setItem('cart', JSON.stringify(items))
+    window.dispatchEvent(new Event('cartUpdated'))
+  }
+
   const handleIncrement = (id) => {
-    setCartItems(prev =>
-      prev.map(item =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
+    const updated = cartItems.map(item =>
+      item.id === id ? { ...item, quantity: item.quantity + 1 } : item
     )
+    updateCart(updated)
   }
 
   const handleDecrement = (id) => {
-    setCartItems(prev =>
-      prev.map(item => {
-        if (item.id === id) {
-          const newQty = item.quantity - 1
-          return newQty > 0 ? { ...item, quantity: newQty } : item
-        }
-        return item
-      })
-    )
+    const updated = cartItems.map(item => {
+      if (item.id === id) {
+        const newQty = item.quantity - 1
+        return newQty > 0 ? { ...item, quantity: newQty } : item
+      }
+      return item
+    })
+    updateCart(updated)
   }
 
   const handleRemove = (id) => {
-    setCartItems(prev => prev.filter(item => item.id !== id))
+    const updated = cartItems.filter(item => item.id !== id)
+    updateCart(updated)
   }
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import johnPorkImg from '../img/John_Pork.webp'
 import { 
@@ -11,53 +11,34 @@ import {
 import ProductItem from '../Components/ProductItem'
 import Footer from '../Components/Footer'
 
-const PRODUCTS_DATA = [
-  {
-    id: 1,
-    brand: 'APPLE',
-    name: 'iPhone 13 128GB - Azul',
-    price: 459.00,
-    quality: 'Excelente',
-    image: 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=256&fit=crop',
-    color: 'Azul Pacífico'
-  },
-  {
-    id: 2,
-    brand: 'SAMSUNG',
-    name: 'Galaxy S22 5G 128GB',
-    price: 320.00,
-    quality: 'Muy bueno',
-    image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=256&fit=crop',
-    color: 'Phantom Black'
-  },
-  {
-    id: 3,
-    brand: 'GOOGLE',
-    name: 'Pixel 7 128GB Obsidian',
-    price: 385.00,
-    quality: 'Excelente',
-    image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=256&fit=crop',
-    color: 'Obsidian'
-  },
-  {
-    id: 4,
-    brand: 'APPLE',
-    name: 'iPhone SE (2022) 64GB',
-    price: 245.00,
-    quality: 'Bueno',
-    image: 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?q=80&w=256&fit=crop',
-    color: 'Negro'
-  }
-]
-
 const HomePage = () => {
+  const [productsData, setProductsData] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBrand, setSelectedBrand] = useState('Todos')
   const [activeSort, setActiveSort] = useState('Destacados')
   const [showSortDropdown, setShowSortDropdown] = useState(false)
+  const [toast, setToast] = useState('')
+
+  useEffect(() => {
+    fetch('/api/celulares')
+      .then(res => res.json())
+      .then(data => {
+        const mapped = data.map(item => ({
+          id: item._id,
+          brand: item.idMarca?.nombre || 'General',
+          name: item.nombre,
+          price: item.precio || 0,
+          quality: item.condicion || 'Excelente',
+          image: item.imagen || 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=256&fit=crop',
+          color: item.color || ''
+        }))
+        setProductsData(mapped)
+      })
+      .catch(console.error)
+  }, [])
 
   // Filter products by brand and search query
-  const filteredProducts = PRODUCTS_DATA.filter(product => {
+  const filteredProducts = productsData.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           product.brand.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesBrand = selectedBrand === 'Todos' || 
@@ -66,11 +47,34 @@ const HomePage = () => {
   })
 
   const handleAddProduct = (product) => {
-    alert(`¡${product.name} añadido al carrito!`)
+    try {
+      const stored = localStorage.getItem('cart')
+      const cart = stored ? JSON.parse(stored) : []
+      const existingIdx = cart.findIndex(item => item.id === product.id)
+      if (existingIdx >= 0) {
+        cart[existingIdx].quantity = (cart[existingIdx].quantity || 1) + 1
+      } else {
+        cart.push({ ...product, quantity: 1 })
+      }
+      localStorage.setItem('cart', JSON.stringify(cart))
+      // Notify Footer and other listeners
+      window.dispatchEvent(new Event('cartUpdated'))
+      // Show brief toast
+      setToast(`✓ ${product.name} añadido al carrito`)
+      setTimeout(() => setToast(''), 2500)
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   return (
     <div className="max-w-md mx-auto bg-slate-50 min-h-screen pb-24 shadow-xl flex flex-col justify-between relative overflow-hidden">
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-lg animate-bounce max-w-[280px] text-center">
+          {toast}
+        </div>
+      )}
       <div>
         {/* Header */}
         <div className="bg-white p-4 pb-3 border-b border-gray-100 flex flex-col space-y-3">

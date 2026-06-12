@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeftIcon, 
@@ -6,20 +6,45 @@ import {
   EnvelopeIcon, 
   PhoneIcon, 
   CalendarIcon,
-  PencilIcon
+  PencilIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline'
 import Footer from '../Components/Footer'
 
 const PersonalInfoPage = () => {
   const navigate = useNavigate()
+  const [client, setClient] = useState(null)
   
-  // Local state for the editable form
   const [formData, setFormData] = useState({
     name: 'Juan Pérez',
     email: 'juan.perez@example.com',
     phone: '+34 600 000 000',
     birthdate: '1992-05-15'
   })
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      setClient(parsed);
+      setFormData({
+        name: `${parsed.nombre || ''} ${parsed.Apellido || ''}`.trim() || 'Usuario',
+        email: parsed.correo || '',
+        phone: parsed.telefono || '',
+        birthdate: '1992-05-15'
+      });
+    } else {
+      // No session — redirect to login
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try { await fetch('/api/logout', { method: 'POST' }) } catch {}
+    localStorage.removeItem('user')
+    localStorage.removeItem('cart')
+    navigate('/login', { replace: true })
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -28,8 +53,40 @@ const PersonalInfoPage = () => {
 
   const handleSave = (e) => {
     e.preventDefault()
-    alert('¡Cambios guardados con éxito!')
-    navigate('/perfil')
+    if (!client) {
+      alert('Cargando información, intenta de nuevo.');
+      return;
+    }
+
+    const parts = formData.name.trim().split(' ');
+    const nombre = parts[0];
+    const Apellido = parts.slice(1).join(' ') || ' ';
+
+    fetch(`/api/clientes/${client._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre,
+        Apellido,
+        correo: formData.email,
+        telefono: formData.phone
+      })
+    })
+      .then(res => {
+        if (res.ok) {
+          alert('¡Cambios guardados con éxito!');
+          const updated = { ...client, nombre, Apellido, correo: formData.email, telefono: formData.phone };
+          localStorage.setItem('user', JSON.stringify(updated));
+          setClient(updated);
+          navigate('/')
+        } else {
+          alert('Error al guardar cambios.');
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Error al conectar con el servidor.');
+      });
   }
 
   return (
@@ -143,6 +200,16 @@ const PersonalInfoPage = () => {
             className="w-full bg-[#0b2240] hover:bg-[#123057] active:scale-[0.98] text-white py-3.5 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center mt-6"
           >
             Guardar Cambios
+          </button>
+
+          {/* Logout Button */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 active:scale-[0.98] text-red-600 py-3.5 rounded-2xl font-bold text-sm border border-red-100 transition-all mt-3"
+          >
+            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+            Cerrar Sesión
           </button>
         </form>
       </div>
